@@ -51,6 +51,26 @@ class OrderFlowIntegrationTest {
                 "PaymentCompleted", "OrderConfirmed", "OrderShipped");
     }
 
+    @Test
+    void outOfStockRejectsOrderAndLeavesStockUntouched() throws Exception {
+        int before = stock("LAPTOP-001");
+
+        UUID id = placeOrder("LAPTOP-001", before + 1, "1.00");
+
+        JsonNode order = awaitStatus(id, "REJECTED");
+        assertThat(order.get("statusReason").asText()).contains("Insufficient stock");
+        assertThat(stock("LAPTOP-001")).isEqualTo(before);
+        assertThat(timelineTypes(id)).containsExactly("OrderCreated", "InventoryRejected");
+    }
+
+    @Test
+    void unknownSkuIsRejected() throws Exception {
+        UUID id = placeOrder("NOPE-999", 1, "1.00");
+
+        JsonNode order = awaitStatus(id, "REJECTED");
+        assertThat(order.get("statusReason").asText()).contains("Unknown SKU");
+    }
+
     private UUID placeOrder(String sku, int quantity, String unitPrice) throws Exception {
         String body = """
                 {"customerId":"cust-1","items":[{"sku":"%s","quantity":%d,"unitPrice":%s}]}
