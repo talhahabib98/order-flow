@@ -71,6 +71,18 @@ class OrderFlowIntegrationTest {
         assertThat(order.get("statusReason").asText()).contains("Unknown SKU");
     }
 
+    @Test
+    void declinedPaymentCancelsOrderAndReleasesStock() throws Exception {
+        int before = stock("PEN-001");
+
+        UUID id = placeOrder("PEN-001", 10, "500.00"); // 5000 > limit of 1000
+
+        JsonNode order = awaitStatus(id, "CANCELLED");
+        assertThat(order.get("statusReason").asText()).contains("declined");
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(stock("PEN-001")).isEqualTo(before));
+        assertThat(timelineTypes(id)).contains("PaymentFailed", "OrderCancelled", "CompensationRequested", "InventoryReleased");
+    }
+
     private UUID placeOrder(String sku, int quantity, String unitPrice) throws Exception {
         String body = """
                 {"customerId":"cust-1","items":[{"sku":"%s","quantity":%d,"unitPrice":%s}]}
