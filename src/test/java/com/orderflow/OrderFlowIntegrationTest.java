@@ -83,6 +83,27 @@ class OrderFlowIntegrationTest {
         assertThat(timelineTypes(id)).contains("PaymentFailed", "OrderCancelled", "CompensationRequested", "InventoryReleased");
     }
 
+    @Test
+    void shippedOrderCannotBeCancelled() throws Exception {
+        UUID id = placeOrder("BOOK-001", 1, "10.00");
+        awaitStatus(id, "SHIPPED");
+
+        mvc.perform(post("/orders/{id}/cancel", id)).andExpect(status().isConflict());
+    }
+
+    @Test
+    void unknownOrderIsNotFound() throws Exception {
+        mvc.perform(get("/orders/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
+        mvc.perform(post("/orders/{id}/cancel", UUID.randomUUID())).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void invalidRequestIsRejected() throws Exception {
+        mvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"customerId\":\"\",\"items\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
     private UUID placeOrder(String sku, int quantity, String unitPrice) throws Exception {
         String body = """
                 {"customerId":"cust-1","items":[{"sku":"%s","quantity":%d,"unitPrice":%s}]}
